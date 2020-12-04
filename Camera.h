@@ -11,6 +11,11 @@ namespace GEngTmp {
     class Camera : public Node {
     public:
         Mesh *mesh() const override;
+
+        Vector3 &lookAt();
+
+    private:
+        Vector3 mLookAt;
     };
 }
 

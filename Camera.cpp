@@ -7,3 +7,7 @@
 GEngTmp::Mesh *GEngTmp::Camera::mesh() const {
     return nullptr;
 }
+
+Vector3 &GEngTmp::Camera::lookAt() {
+    return mLookAt;
+}

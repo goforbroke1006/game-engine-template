@@ -37,8 +37,9 @@ include_directories(
         "${DXSDK_DIR}/Include/"
 )
 target_link_libraries(${PROJECT_NAME}
-        d3dcompiler d2d1 dxgi DxErr windowscodecs WindowsCodecs legacy_stdio_definitions Dwrite
-        d3d11 d3dx11 d3dx11d d3d9 d3dx9d)
+        d3dcompiler d2d1 dxgi windowscodecs WindowsCodecs Dwrite
+        DxErr legacy_stdio_definitions
+        d3d11 d3dx11 d3dx11d)
 
 # link OpnGL/freeglut
 find_package(OpenGL REQUIRED)

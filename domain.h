@@ -17,6 +17,10 @@ struct Vector2 {
 
 struct Vector3 {
     double x, y, z;
+
+    static Vector3 zero() {
+        return Vector3{0.0f, 0.0f, 0.0f};
+    }
 };
 
 struct Vector4 {

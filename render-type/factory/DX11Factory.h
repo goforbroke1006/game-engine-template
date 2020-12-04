@@ -7,7 +7,6 @@
 
 #include <D3D11.h>
 #include <DirectXMath.h>
-#include <d3dx9math.h>
 #include "../DX11RenderTarget.h"
 
 class DX11Factory {
@@ -25,9 +24,9 @@ public:
             ID3D11DepthStencilState *&depthStencilState,
             ID3D11DepthStencilView *&depthStencilView,
             ID3D11RasterizerState *&rasterState,
-            D3DXMATRIX &projectionMatrix,
-            D3DXMATRIX &worldMatrix,
-            D3DXMATRIX &orthoMatrix,
+            DirectX::XMMATRIX &projectionMatrix,
+            DirectX::XMMATRIX &worldMatrix,
+            DirectX::XMMATRIX &orthoMatrix,
 
             ID3D11InputLayout *&inputLayout
     );

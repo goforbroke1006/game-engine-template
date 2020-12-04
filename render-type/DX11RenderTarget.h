@@ -12,11 +12,12 @@
 #include <DirectXMath.h>
 #include <map>
 #include "../Mesh.h"
-#include <d3dx9math.h>
 
 struct DxVERTEX {
-    DirectX::XMFLOAT3 pos;
-    DirectX::XMFLOAT4 color;
+    DirectX::XMVECTOR pos;
+    DirectX::XMVECTOR color;
+//    DirectX::XMFLOAT4 pos;
+//    DirectX::XMFLOAT4 color;
 //    float pos[3];
 //    float color[4];
 };
@@ -45,10 +46,10 @@ private:
             ID3D11Texture2D *depthStencilBuffer,
             ID3D11DepthStencilState *depthStencilState,
             ID3D11DepthStencilView *depthStencilView,
-            ID3D11RasterizerState *rasterState,
-            D3DXMATRIX projectionMatrix,
-            D3DXMATRIX worldMatrix,
-            D3DXMATRIX orthoMatrix
+            ID3D11RasterizerState *rasterState
+//            DirectX::XMMATRIX projectionMatrix,
+//            DirectX::XMMATRIX worldMatrix,
+//            DirectX::XMMATRIX orthoMatrix
     );
 
     IDXGISwapChain *mSwapChain;
@@ -59,11 +60,13 @@ private:
     ID3D11DepthStencilState *mDepthStencilState;
     ID3D11DepthStencilView *mDepthStencilView;
     ID3D11RasterizerState *mRasterState;
-    D3DXMATRIX mProjectionMatrix;
-    D3DXMATRIX mWorldMatrix;
-    D3DXMATRIX mOrthoMatrix;
+//    DirectX::XMMATRIX mProjectionMatrix;
+//    DirectX::XMMATRIX mWorldMatrix;
+//    DirectX::XMMATRIX mOrthoMatrix;
 
-    D3DXMATRIX mViewMatrix;
+    DirectX::XMMATRIX mViewMatrix;
+
+    std::map<const GEngTmp::Mesh *const, std::vector<DxVERTEX>> mVertexCache;
     std::map<const GEngTmp::Mesh *const, ID3D11Buffer *> mMeshBuffers;
 };
 

@@ -7,8 +7,13 @@
 #include <vector>
 #include <stdexcept>
 #include "../../def.h"
-#include <d3dx9math.h>
 #include <d3dcompiler.h>
+
+//struct MatrixBufferType {
+//    D3DXMATRIX world;
+//    D3DXMATRIX view;
+//    D3DXMATRIX projection;
+//};
 
 const std::string shaderSourceStr = R"(
 
@@ -18,6 +23,92 @@ VOut vs_shader(float4 position : POSITION, float4 color : COLOR) { VOut output; 
 
 float4 ps_shader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET { return color; }
 
+)";
+
+/*const std::string shader2SourceStr = R"(
+
+struct VOut { float4 position: SV_POSITION; float4 color: COLOR; };
+
+cbuffer MatrixBuffer
+{
+	matrix worldMatrix;
+	matrix viewMatrix;
+	matrix projectionMatrix;
+};
+
+VOut vs_shader(float4 position : POSITION, float4 color : COLOR) {
+    VOut output;
+
+    // Change the position vector to be 4 units for proper matrix calculations.
+    position.w = 1.0f;
+
+	// Calculate the position of the vertex against the world, view, and projection matrices.
+    output.position = mul(position, worldMatrix);
+    output.position = mul(output.position, viewMatrix);
+    output.position = mul(output.position, projectionMatrix);
+
+    output.color = color;
+
+    return output;
+}
+
+float4 ps_shader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET { return color; }
+
+)";*/
+
+const std::string lightShaderVertexSourceStr = R"(
+
+cbuffer MatrixBuffer
+{
+	matrix worldMatrix;
+	matrix viewMatrix;
+	matrix projectionMatrix;
+};
+
+struct VertexInputType
+{
+    float4 position : POSITION;
+    float4 color : COLOR;
+};
+
+struct PixelInputType
+{
+    float4 position : SV_POSITION;
+    float4 color : COLOR;
+};
+
+PixelInputType LightVertexShader(VertexInputType input)
+{
+    PixelInputType output;
+
+	// Change the position vector to be 4 units for proper matrix calculations.
+    input.position.w = 1.0f;
+
+	// Calculate the position of the vertex against the world, view, and projection matrices.
+    output.position = mul(input.position, worldMatrix);
+    output.position = mul(output.position, viewMatrix);
+    output.position = mul(output.position, projectionMatrix);
+
+	// Store the texture coordinates for the pixel shader.
+	output.color = input.color;
+
+    return output;
+}
+
+)";
+
+const std::string lightShaderPixelSourceStr = R"(
+    struct PixelInputType
+    {
+        float4 position : SV_POSITION;
+        float4 color : COLOR;
+        float3 normal : NORMAL;
+    };
+
+    float4 LightPixelShader(PixelInputType input) : SV_TARGET
+    {
+        return input.color;
+    }
 )";
 
 void DX11Factory::make(
@@ -33,9 +124,9 @@ void DX11Factory::make(
         ID3D11DepthStencilState *&depthStencilState,
         ID3D11DepthStencilView *&depthStencilView,
         ID3D11RasterizerState *&rasterState,
-        D3DXMATRIX &projectionMatrix,
-        D3DXMATRIX &worldMatrix,
-        D3DXMATRIX &orthoMatrix,
+        DirectX::XMMATRIX &projectionMatrix,
+        DirectX::XMMATRIX &worldMatrix,
+        DirectX::XMMATRIX &orthoMatrix,
         ID3D11InputLayout *&inputLayout
 ) {
 
@@ -247,14 +338,18 @@ void DX11Factory::make(
     {
         ID3D10Blob *VS, *PS;
 
-        D3DCompile(
+        if (FAILED(D3DCompile(
                 shaderSourceStr.c_str(), shaderSourceStr.length(), nullptr, nullptr, nullptr,
                 "vs_shader", "vs_4_0", 0, 0, &VS, nullptr
-        );
-        D3DCompile(
+        ))) {
+            throw std::runtime_error("can't compile vertex shader");
+        }
+        if (FAILED(D3DCompile(
                 shaderSourceStr.c_str(), shaderSourceStr.length(), nullptr, nullptr, nullptr,
                 "ps_shader", "ps_4_0", 0, 0, &PS, nullptr
-        );
+        ))) {
+            throw std::runtime_error("can't compile pixel shader");
+        }
 
         ID3D11VertexShader *vertexShader;
         ID3D11PixelShader *pixelShader;
@@ -276,20 +371,67 @@ void DX11Factory::make(
 
         device->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(), &inputLayout);
         deviceContext->IASetInputLayout(inputLayout);
+
+//        D3D11_BUFFER_DESC matrixBufferDesc;
+//        matrixBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+//        matrixBufferDesc.ByteWidth = sizeof(MatrixBufferType);
+//        matrixBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+//        matrixBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+//        matrixBufferDesc.MiscFlags = 0;
+//        matrixBufferDesc.StructureByteStride = 0;
+//        ID3D11Buffer *m_matrixBuffer;
+//        if (FAILED(device->CreateBuffer(&matrixBufferDesc, NULL, &m_matrixBuffer))) {
+//            throw std::runtime_error("can't create matrix buffer");
+//        }
     }
+
+//    {
+//        ID3D10Blob *VS, *PS;
+//
+//        D3DCompile(
+//                lightShaderVertexSourceStr.c_str(), lightShaderVertexSourceStr.length(), nullptr, nullptr, nullptr,
+//                "LightVertexShader", "vs_5_0", 0, 0, &VS, nullptr
+//        );
+//        D3DCompile(
+//                lightShaderPixelSourceStr.c_str(), lightShaderPixelSourceStr.length(), nullptr, nullptr, nullptr,
+//                "LightPixelShader", "ps_5_0", 0, 0, &PS, nullptr
+//        );
+//
+//        ID3D11VertexShader *vertexShader;
+//        ID3D11PixelShader *pixelShader;
+//
+//        // encapsulate both shaders into shader objects
+//        device->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), nullptr, &vertexShader);
+//        device->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), nullptr, &pixelShader);
+//
+//        // set the shader objects
+//        deviceContext->VSSetShader(vertexShader, 0, 0);
+//        deviceContext->PSSetShader(pixelShader, 0, 0);
+//
+//        D3D11_INPUT_ELEMENT_DESC polygonLayout[] = {
+//                {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,  D3D11_INPUT_PER_VERTEX_DATA, 0,},
+//                {"COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0,},
+////                {"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0,}
+//        };
+//
+//        size_t numElements = sizeof(polygonLayout) / sizeof(polygonLayout[0]);
+//        device->CreateInputLayout(
+//                polygonLayout, numElements, VS->GetBufferPointer(), VS->GetBufferSize(), &inputLayout);
+//        deviceContext->IASetInputLayout(inputLayout);
+//
+//        vertexShader->Release();
+//        vertexShader = nullptr;
+//        pixelShader->Release();
+//        pixelShader = nullptr;
+//
+//    }
 
 
     float fieldOfView, screenAspect;
-    // Setup the projection matrix.
-    fieldOfView = (float) D3DX_PI / 4.0f;
+    fieldOfView = (float) 3.14 / 4.0f;
     screenAspect = (float) screenWidth / (float) screenHeight;
 
-    // Create the projection matrix for 3D rendering.
-    D3DXMatrixPerspectiveFovLH(&projectionMatrix, fieldOfView, screenAspect, screenNear, screenDepth);
-
-    // Initialize the world matrix to the identity matrix.
-    D3DXMatrixIdentity(&worldMatrix);
-
-    // Create an orthographic projection matrix for 2D rendering.
-    D3DXMatrixOrthoLH(&orthoMatrix, (float) screenWidth, (float) screenHeight, screenNear, screenDepth);
+    projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(fieldOfView, screenAspect, screenNear, screenDepth);
+    worldMatrix = DirectX::XMMatrixIdentity();
+    orthoMatrix = DirectX::XMMatrixOrthographicLH((float) screenWidth, (float) screenHeight, screenNear, screenDepth);
 }

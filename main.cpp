@@ -3,7 +3,6 @@
 //
 
 #include "utils.h"
-#include <d3dx9math.h>
 #include <iostream>
 #include "Application.h"
 #include "PrimitivesFactory.h"
@@ -25,16 +24,19 @@ int main(int argc, char **argv) {
     pNode->setMesh(PrimitivesFactory::triangle());
 //    pNode->setMesh(PrimitivesFactory::cube(0.5));
 
-    app->getScene()->createBehavior(pNode, [](Node *const self) {
-        static float rotation = 0.0f;
-        rotation += (float) D3DX_PI * 0.01f;
-        if (rotation > 360.0f) {
-            rotation -= 360.0f;
-        }
-        self->transform().rotation().y = rotation;
+//    app->getScene()->createBehavior(pNode, [](Node *const self) {
+//        static float rotation = 0.0f;
+//        rotation += (float) 3.14f * 0.001f;
+//        if (rotation > 360.0f) {
+//            rotation -= 360.0f;
+//        }
+//        self->transform().rotation().y = rotation;
+//
+//        std::cout << "Rotation Y = " << rotation << std::endl;
+//    });
 
-        std::cout << "Rotation Y = " << rotation << std::endl;
-    });
+    app->getScene()->camera()->transform().position() = Vector3{3.0, 3.0, 3.0};
+    app->getScene()->camera()->lookAt() = Vector3::zero();
 
     app->loop();
     return 0;
