@@ -10,9 +10,11 @@
 namespace GEngTmp {
     class Transform {
     public:
-         Vector3 &position();
+        Transform();
 
-         Vector4 &rotation();
+        Vector3 &position();
+
+        Vector4 &rotation();
 
         Vector3 &scale();
 

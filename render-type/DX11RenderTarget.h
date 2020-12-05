@@ -13,6 +13,12 @@
 #include <map>
 #include "../Mesh.h"
 
+struct ConstantBuffer {
+    DirectX::XMMATRIX mWorld;
+    DirectX::XMMATRIX mView;
+    DirectX::XMMATRIX mProjection;
+};
+
 struct DxVERTEX {
     DirectX::XMVECTOR pos;
     DirectX::XMVECTOR color;
@@ -46,10 +52,14 @@ private:
             ID3D11Texture2D *depthStencilBuffer,
             ID3D11DepthStencilState *depthStencilState,
             ID3D11DepthStencilView *depthStencilView,
-            ID3D11RasterizerState *rasterState
-//            DirectX::XMMATRIX projectionMatrix,
-//            DirectX::XMMATRIX worldMatrix,
-//            DirectX::XMMATRIX orthoMatrix
+            ID3D11RasterizerState *rasterState,
+            ID3D11SamplerState *samplerState,
+            DirectX::XMMATRIX m_World,
+            DirectX::XMMATRIX m_View,
+            DirectX::XMMATRIX m_Projection,
+            ID3D11Buffer *mConstantBuffer,
+            ID3D11VertexShader *pVS,
+            ID3D11PixelShader *pPS
     );
 
     IDXGISwapChain *mSwapChain;
@@ -60,13 +70,18 @@ private:
     ID3D11DepthStencilState *mDepthStencilState;
     ID3D11DepthStencilView *mDepthStencilView;
     ID3D11RasterizerState *mRasterState;
-//    DirectX::XMMATRIX mProjectionMatrix;
-//    DirectX::XMMATRIX mWorldMatrix;
-//    DirectX::XMMATRIX mOrthoMatrix;
+    ID3D11SamplerState *mSamplerState;
 
-    DirectX::XMMATRIX mViewMatrix;
+    DirectX::XMMATRIX mWorld;
+    DirectX::XMMATRIX mView;
+    DirectX::XMMATRIX mProjection;
 
-    std::map<const GEngTmp::Mesh *const, std::vector<DxVERTEX>> mVertexCache;
+    ID3D11Buffer *mConstantBuffer = nullptr;
+
+    ID3D11VertexShader *pVertexShader = nullptr;
+    ID3D11PixelShader *pPixelShader = nullptr;
+
+//    std::map<const GEngTmp::Mesh *const, std::vector<DxVERTEX>> mVertexCache;
     std::map<const GEngTmp::Mesh *const, ID3D11Buffer *> mMeshBuffers;
 };
 

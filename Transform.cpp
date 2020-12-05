@@ -4,11 +4,16 @@
 
 #include "Transform.h"
 
- Vector3 &GEngTmp::Transform::position() {
+GEngTmp::Transform::Transform() :
+        mPosition({0.0, 0.0, 0.0}),
+        mRotation({0.0, 0.0, 0.0, 1.0}),
+        mScale({1.0, 1.0, 1.0}) {}
+
+Vector3 &GEngTmp::Transform::position() {
     return mPosition;
 }
 
- Vector4 &GEngTmp::Transform::rotation() {
+Vector4 &GEngTmp::Transform::rotation() {
     return mRotation;
 }
 

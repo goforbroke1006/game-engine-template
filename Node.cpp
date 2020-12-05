@@ -16,7 +16,7 @@ GEngTmp::Mesh *GEngTmp::Node::mesh() const {
     return mMesh;
 }
 
-GEngTmp::Transform GEngTmp::Node::transform() {
+GEngTmp::Transform &GEngTmp::Node::transform() {
     return mTransform;
 }
 

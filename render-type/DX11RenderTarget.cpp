@@ -16,6 +16,9 @@
 #include <D3D11.h>
 #include <D3Dcompiler.h>
 
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "Dxgi.lib")
+#pragma comment(lib, "d3dcompiler.lib")
 
 BaseRenderTarget *
 DX11RenderTarget::create(UINT screenWidth, UINT screenHeight, bool windowed) {
@@ -30,12 +33,16 @@ DX11RenderTarget::create(UINT screenWidth, UINT screenHeight, bool windowed) {
     ID3D11DepthStencilState *depthStencilState;
     ID3D11DepthStencilView *depthStencilView;
     ID3D11RasterizerState *rasterState;
-
-    DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixIdentity();
-    DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixIdentity();
-    DirectX::XMMATRIX orthoMatrix = DirectX::XMMatrixIdentity();
-
+    ID3D11SamplerState *samplerState;
     ID3D11InputLayout *inputLayout;
+
+    DirectX::XMMATRIX mWorldMatrix = DirectX::XMMatrixIdentity();
+    DirectX::XMMATRIX mViewMatrix = DirectX::XMMatrixIdentity();
+    DirectX::XMMATRIX mProjectionMatrix = DirectX::XMMatrixIdentity();
+
+    ID3D11Buffer *constantBuffer;
+    ID3D11VertexShader *pVS;
+    ID3D11PixelShader *pPS;
 
     DX11Factory::make(
             hwnd,
@@ -50,16 +57,25 @@ DX11RenderTarget::create(UINT screenWidth, UINT screenHeight, bool windowed) {
             depthStencilState,
             depthStencilView,
             rasterState,
-            projectionMatrix, worldMatrix, orthoMatrix,
-            inputLayout
+            samplerState,
+            mWorldMatrix,
+            mViewMatrix,
+            mProjectionMatrix,
+            inputLayout,
+            constantBuffer,
+            pVS,
+            pPS
     );
 
     return new DX11RenderTarget(
             screenWidth, screenHeight,
             swapChain, device, deviceContext, renderTargetView,
             depthStencilBuffer, depthStencilState, depthStencilView,
-            rasterState/*,
-            projectionMatrix, worldMatrix, orthoMatrix*/
+            rasterState,
+            samplerState,
+            mWorldMatrix, mViewMatrix, mProjectionMatrix,
+            constantBuffer,
+            pVS, pPS
     );
 }
 
@@ -122,10 +138,14 @@ DX11RenderTarget::DX11RenderTarget(
         ID3D11Texture2D *depthStencilBuffer,
         ID3D11DepthStencilState *depthStencilState,
         ID3D11DepthStencilView *depthStencilView,
-        ID3D11RasterizerState *rasterState/*,
-        DirectX::XMMATRIX projectionMatrix,
-        DirectX::XMMATRIX worldMatrix,
-        DirectX::XMMATRIX orthoMatrix*/
+        ID3D11RasterizerState *rasterState,
+        ID3D11SamplerState *samplerState,
+        DirectX::XMMATRIX m_World,
+        DirectX::XMMATRIX m_View,
+        DirectX::XMMATRIX m_Projection,
+        ID3D11Buffer *constantBuffer,
+        ID3D11VertexShader *pVS,
+        ID3D11PixelShader *pPS
 ) : BaseRenderTarget(screenWidth, screenHeight),
     mSwapChain(swapChain),
     mDevice(device),
@@ -134,10 +154,13 @@ DX11RenderTarget::DX11RenderTarget(
     mDepthStencilBuffer(depthStencilBuffer),
     mDepthStencilState(depthStencilState),
     mDepthStencilView(depthStencilView),
-    mRasterState(rasterState)/*,
-    mProjectionMatrix(projectionMatrix),
-    mWorldMatrix(worldMatrix),
-    mOrthoMatrix(orthoMatrix)*/ {}
+    mRasterState(rasterState),
+    mSamplerState(samplerState),
+    mWorld(m_World),
+    mView(m_View),
+    mProjection(m_Projection),
+    mConstantBuffer(constantBuffer),
+    pVertexShader(pVS), pPixelShader(pPS) {}
 
 void DX11RenderTarget::Release() {
     // switch to windowed mode
@@ -158,6 +181,9 @@ void DX11RenderTarget::Release() {
 
     mDeviceContext->Release();
     mDeviceContext = nullptr;
+
+    mConstantBuffer->Release();
+    mConstantBuffer = nullptr;
 }
 
 void DX11RenderTarget::loop(GEngTmp::Scene *scene) {
@@ -178,6 +204,24 @@ void DX11RenderTarget::loop(GEngTmp::Scene *scene) {
         // set view matrix with camera
         GEngTmp::Camera *pCamera = scene->camera();
         {
+            DirectX::XMVECTOR Eye = DirectX::XMVectorSet(
+                    (float) pCamera->transform().position().x,
+                    (float) pCamera->transform().position().y,
+                    (float) pCamera->transform().position().z,
+                    0.0f);
+            DirectX::XMVECTOR At = DirectX::XMVectorSet(
+                    (float) pCamera->lookAt().x,
+                    (float) pCamera->lookAt().y,
+                    (float) pCamera->lookAt().z,
+                    0.0f);
+            DirectX::XMVECTOR Up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+            mView = DirectX::XMMatrixLookAtLH(Eye, At, Up);
+
+            mProjection = DirectX::XMMatrixPerspectiveFovLH(
+                    DirectX::XM_PIDIV4,
+                    (float) mScreenWidth / (float) mScreenHeight, 0.01f, 1000.0f);
+        }
+        /*{
             DirectX::XMVECTOR up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f);
             DirectX::XMVECTOR position = DirectX::XMVectorSet(
                     (float) pCamera->transform().position().x,
@@ -212,7 +256,7 @@ void DX11RenderTarget::loop(GEngTmp::Scene *scene) {
 
             // Finally create the view matrix from the three updated vectors.
             mViewMatrix = DirectX::XMMatrixLookAtLH(position, lookAt, up);
-        }
+        }*/
 
 
         {
@@ -222,44 +266,11 @@ void DX11RenderTarget::loop(GEngTmp::Scene *scene) {
                     b(node);
                 }
 
-//                {
-//                    D3DXMatrixRotationY(&mWorldMatrix, n->transform().rotation().y);
-//                }
-
                 GEngTmp::Mesh *mesh = node->mesh();
 
                 if (nullptr == mesh) {
                     // empty node
                     continue;
-                }
-
-                {
-                    if (mVertexCache.count(mesh) == 0) {
-                        mVertexCache[mesh] = std::vector<DxVERTEX>(mesh->size());
-                    }
-
-                    for (size_t vi = 0; vi < mesh->size(); ++vi) {
-                        mVertexCache[mesh][vi].pos = DirectX::XMVectorSet(
-                                (float) mesh->vertices()[vi].position.x,
-                                (float) mesh->vertices()[vi].position.y,
-                                (float) mesh->vertices()[vi].position.z,
-                                1.0f
-                        );
-
-                        mVertexCache[mesh][vi].color = DirectX::XMVectorSet(
-                                (float) mesh->vertices()[vi].color.green / 255.0f,
-                                (float) mesh->vertices()[vi].color.blue / 255.0f,
-                                (float) mesh->vertices()[vi].color.alpha / 255.0f,
-                                (float) mesh->vertices()[vi].color.red / 255.0f
-                        );
-
-                        DirectX::XMMATRIX objMatrix = DirectX::XMMatrixIdentity();
-                        objMatrix *= DirectX::XMMatrixRotationY(node->transform().rotation().y);
-
-                        mVertexCache[mesh][vi].pos = DirectX::XMVector3TransformCoord(
-                                mVertexCache[mesh][vi].pos, objMatrix);
-                    }
-
                 }
 
                 if (nullptr == mMeshBuffers[mesh]) {
@@ -277,18 +288,23 @@ void DX11RenderTarget::loop(GEngTmp::Scene *scene) {
                         throw std::runtime_error("device can't create buffer");
                     }
 
-//                    auto *dxVertices = new DxVERTEX[mesh->size()];
-//                    for (size_t vi = 0; vi < mesh->size(); ++vi) {
-//                        dxVertices[vi].pos.x = (float) mesh->vertices()[vi].position.x;
-//                        dxVertices[vi].pos.y = (float) mesh->vertices()[vi].position.y;
-//                        dxVertices[vi].pos.z = (float) mesh->vertices()[vi].position.z;
-//                        dxVertices[vi].color.x = (float) mesh->vertices()[vi].color.red / 255.0f;
-//                        dxVertices[vi].color.y = (float) mesh->vertices()[vi].color.green / 255.0f;
-//                        dxVertices[vi].color.z = (float) mesh->vertices()[vi].color.blue / 255.0f;
-//                        dxVertices[vi].color.w = (float) mesh->vertices()[vi].color.alpha / 255.0f;
-//                    }
+                    auto *dxVertices = new DxVERTEX[mesh->size()];
+                    for (size_t vi = 0; vi < mesh->size(); ++vi) {
+                        dxVertices[vi].pos = DirectX::XMVectorSet(
+                                (float) mesh->vertices()[vi].position.x,
+                                (float) mesh->vertices()[vi].position.y,
+                                (float) mesh->vertices()[vi].position.z,
+                                1.0f
+                        );
+                        dxVertices[vi].color = DirectX::XMVectorSet(
+                                (float) mesh->vertices()[vi].color.green / 255.0f,
+                                (float) mesh->vertices()[vi].color.blue / 255.0f,
+                                (float) mesh->vertices()[vi].color.alpha / 255.0f,
+                                (float) mesh->vertices()[vi].color.red / 255.0f
+                        );
+                    }
 
-                    DxVERTEX *dxVertices = &mVertexCache[mesh][0];
+//                    DxVERTEX *dxVertices = &mVertexCache[mesh][0];
 
                     // copy the vertices into the buffer
                     D3D11_MAPPED_SUBRESOURCE ms;
@@ -301,18 +317,34 @@ void DX11RenderTarget::loop(GEngTmp::Scene *scene) {
                     mMeshBuffers[mesh] = verticesBuffer;
                 }
 
-                {
-                    ID3D11Buffer *verticesBuffer = mMeshBuffers[mesh];
+                mWorld = DirectX::XMMatrixIdentity();
 
-                    DxVERTEX *dxVertices = &mVertexCache[mesh][0];
+                mWorld *= DirectX::XMMatrixRotationX((float) node->transform().rotation().x);
+                mWorld *= DirectX::XMMatrixRotationY((float) node->transform().rotation().y);
+                mWorld *= DirectX::XMMatrixRotationZ((float) node->transform().rotation().z);
 
-                    D3D11_MAPPED_SUBRESOURCE resource;
-                    mDeviceContext->Map(verticesBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &resource);
-                    memcpy(resource.pData, dxVertices, mVertexCache[mesh].size());
-                    mDeviceContext->Unmap(verticesBuffer, 0);
+                mWorld *= DirectX::XMMatrixScaling(
+                        (float) node->transform().scale().x,
+                        (float) node->transform().scale().y,
+                        (float) node->transform().scale().z
+                );
 
-                    mMeshBuffers[mesh] = verticesBuffer;
-                }
+                mWorld *= DirectX::XMMatrixTranslation(
+                        (float) node->transform().position().x,
+                        (float) node->transform().position().y,
+                        (float) node->transform().position().z
+                );
+
+                ConstantBuffer cb{};
+                cb.mWorld = XMMatrixTranspose(mWorld);
+                cb.mView = XMMatrixTranspose(mView);
+                cb.mProjection = XMMatrixTranspose(mProjection);
+                mDeviceContext->UpdateSubresource(mConstantBuffer, 0, nullptr, &cb, 0, 0);
+
+                mDeviceContext->VSSetShader(pVertexShader, 0, 0);
+                mDeviceContext->VSSetConstantBuffers(0, 1, &mConstantBuffer);
+                mDeviceContext->PSSetShader(pPixelShader, 0, 0);
+                mDeviceContext->PSSetSamplers(0, 1, &mSamplerState);
 
                 ID3D11Buffer *verticesBuffer = mMeshBuffers[mesh];
                 UINT stride = sizeof(DxVERTEX);
@@ -330,9 +362,6 @@ void DX11RenderTarget::loop(GEngTmp::Scene *scene) {
 //            mDeviceContext->VSSetConstantBuffers(0, 1, &cbPerObjectBuffer);
 
             HRES_LOG_WARN(mSwapChain->Present(1, 0), "can't render frame");
-//            if (FAILED(mSwapChain->Present(1, 0))) {
-//                throw std::logic_error("Unexpected error");
-//            }
         }
     }
 }

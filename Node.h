@@ -18,7 +18,7 @@ namespace GEngTmp {
 
         virtual Mesh *mesh() const;
 
-        Transform transform();
+        Transform &transform();
 
 //        void OnUpdate(void (*pFunction)(Node *));
 

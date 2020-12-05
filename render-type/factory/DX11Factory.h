@@ -24,11 +24,16 @@ public:
             ID3D11DepthStencilState *&depthStencilState,
             ID3D11DepthStencilView *&depthStencilView,
             ID3D11RasterizerState *&rasterState,
-            DirectX::XMMATRIX &projectionMatrix,
-            DirectX::XMMATRIX &worldMatrix,
-            DirectX::XMMATRIX &orthoMatrix,
+            ID3D11SamplerState *&samplerState,
+            DirectX::XMMATRIX &mWorldMatrix,
+            DirectX::XMMATRIX &mViewMatrix,
+            DirectX::XMMATRIX &mProjectionMatrix,
 
-            ID3D11InputLayout *&inputLayout
+            ID3D11InputLayout *&inputLayout,
+
+            ID3D11Buffer *&constantBuffer,
+            ID3D11VertexShader *&pVS,
+            ID3D11PixelShader *&pPS
     );
 };
 

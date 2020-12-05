@@ -9,19 +9,33 @@
 #include "../../def.h"
 #include <d3dcompiler.h>
 
-//struct MatrixBufferType {
-//    D3DXMATRIX world;
-//    D3DXMATRIX view;
-//    D3DXMATRIX projection;
-//};
-
 const std::string shaderSourceStr = R"(
 
-struct VOut { float4 position: SV_POSITION; float4 color: COLOR; };
+cbuffer ConstantBuffer : register(b0)
+{
+	matrix World;
+	matrix View;
+	matrix Projection;
+}
 
-VOut vs_shader(float4 position : POSITION, float4 color : COLOR) { VOut output; output.position = position; output.color = color; return output; }
+struct VOut {
+    float4 position: SV_POSITION;
+    float4 color: COLOR;
+};
 
-float4 ps_shader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET { return color; }
+VOut vs_shader(float4 position : POSITION, float4 color : COLOR) {
+    VOut output;
+    //output.position = position;
+    output.position = mul(position, World);
+	output.position = mul(output.position, View);
+	output.position = mul(output.position, Projection);
+    output.color = color;
+    return output;
+}
+
+float4 ps_shader(float4 position : SV_POSITION, float4 color : COLOR) : SV_TARGET {
+    return color;
+}
 
 )";
 
@@ -124,10 +138,14 @@ void DX11Factory::make(
         ID3D11DepthStencilState *&depthStencilState,
         ID3D11DepthStencilView *&depthStencilView,
         ID3D11RasterizerState *&rasterState,
-        DirectX::XMMATRIX &projectionMatrix,
-        DirectX::XMMATRIX &worldMatrix,
-        DirectX::XMMATRIX &orthoMatrix,
-        ID3D11InputLayout *&inputLayout
+        ID3D11SamplerState *&samplerState,
+        DirectX::XMMATRIX &mWorldMatrix,
+        DirectX::XMMATRIX &mViewMatrix,
+        DirectX::XMMATRIX &mProjectionMatrix,
+        ID3D11InputLayout *&inputLayout,
+        ID3D11Buffer *&constantBuffer,
+        ID3D11VertexShader *&pVS,
+        ID3D11PixelShader *&pPS
 ) {
 
 
@@ -351,16 +369,16 @@ void DX11Factory::make(
             throw std::runtime_error("can't compile pixel shader");
         }
 
-        ID3D11VertexShader *vertexShader;
-        ID3D11PixelShader *pixelShader;
+//        ID3D11VertexShader *vertexShader;
+//        ID3D11PixelShader *pixelShader;
 
         // encapsulate both shaders into shader objects
-        device->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), nullptr, &vertexShader);
-        device->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), nullptr, &pixelShader);
+        device->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), nullptr, &pVS);
+        device->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), nullptr, &pPS);
 
         // set the shader objects
-        deviceContext->VSSetShader(vertexShader, 0, 0);
-        deviceContext->PSSetShader(pixelShader, 0, 0);
+        deviceContext->VSSetShader(pVS, 0, 0);
+        deviceContext->PSSetShader(pPS, 0, 0);
 
         // create the input layout object
         D3D11_INPUT_ELEMENT_DESC ied[] =
@@ -372,66 +390,52 @@ void DX11Factory::make(
         device->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(), &inputLayout);
         deviceContext->IASetInputLayout(inputLayout);
 
-//        D3D11_BUFFER_DESC matrixBufferDesc;
-//        matrixBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-//        matrixBufferDesc.ByteWidth = sizeof(MatrixBufferType);
-//        matrixBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-//        matrixBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-//        matrixBufferDesc.MiscFlags = 0;
-//        matrixBufferDesc.StructureByteStride = 0;
-//        ID3D11Buffer *m_matrixBuffer;
-//        if (FAILED(device->CreateBuffer(&matrixBufferDesc, NULL, &m_matrixBuffer))) {
-//            throw std::runtime_error("can't create matrix buffer");
-//        }
+        {
+            D3D11_BUFFER_DESC bd;
+            ZeroMemory(&bd, sizeof(bd));
+
+            bd.Usage = D3D11_USAGE_DEFAULT;
+            bd.ByteWidth = sizeof(ConstantBuffer);
+            bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            bd.CPUAccessFlags = 0;
+
+            if (FAILED(device->CreateBuffer(&bd, nullptr, &constantBuffer))) {
+                throw std::runtime_error("can't create constant buffer");
+            }
+
+            D3D11_SAMPLER_DESC sampDesc;
+            ZeroMemory(&sampDesc, sizeof(sampDesc));
+            sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+            sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+            sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+            sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+            sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+            sampDesc.MinLOD = 0;
+            sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+            if (FAILED(device->CreateSamplerState(&sampDesc, &samplerState))) {
+                throw std::runtime_error("can't create sampler state");
+            }
+
+//            DirectX::XMVECTOR Eye = DirectX::XMVectorSet(0.0f, 5.0f, -300.0f, 0.0f);
+//            DirectX::XMVECTOR At = DirectX::XMVectorSet(0.0f, 100.0f, 0.0f, 0.0f);
+//            DirectX::XMVECTOR Up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+//            mViewMatrix = DirectX::XMMatrixLookAtLH(Eye, At, Up);
+//
+//            mProjectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
+//                    DirectX::XM_PIDIV4,
+//                    (float) screenWidth / (float) screenHeight, 0.01f, 1000.0f);
+        }
+
+
     }
 
-//    {
-//        ID3D10Blob *VS, *PS;
-//
-//        D3DCompile(
-//                lightShaderVertexSourceStr.c_str(), lightShaderVertexSourceStr.length(), nullptr, nullptr, nullptr,
-//                "LightVertexShader", "vs_5_0", 0, 0, &VS, nullptr
-//        );
-//        D3DCompile(
-//                lightShaderPixelSourceStr.c_str(), lightShaderPixelSourceStr.length(), nullptr, nullptr, nullptr,
-//                "LightPixelShader", "ps_5_0", 0, 0, &PS, nullptr
-//        );
-//
-//        ID3D11VertexShader *vertexShader;
-//        ID3D11PixelShader *pixelShader;
-//
-//        // encapsulate both shaders into shader objects
-//        device->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), nullptr, &vertexShader);
-//        device->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), nullptr, &pixelShader);
-//
-//        // set the shader objects
-//        deviceContext->VSSetShader(vertexShader, 0, 0);
-//        deviceContext->PSSetShader(pixelShader, 0, 0);
-//
-//        D3D11_INPUT_ELEMENT_DESC polygonLayout[] = {
-//                {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,  D3D11_INPUT_PER_VERTEX_DATA, 0,},
-//                {"COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0,},
-////                {"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0,}
-//        };
-//
-//        size_t numElements = sizeof(polygonLayout) / sizeof(polygonLayout[0]);
-//        device->CreateInputLayout(
-//                polygonLayout, numElements, VS->GetBufferPointer(), VS->GetBufferSize(), &inputLayout);
-//        deviceContext->IASetInputLayout(inputLayout);
-//
-//        vertexShader->Release();
-//        vertexShader = nullptr;
-//        pixelShader->Release();
-//        pixelShader = nullptr;
-//
-//    }
 
+//    float fieldOfView, screenAspect;
+//    fieldOfView = (float) 3.14 / 4.0f;
+//    screenAspect = (float) screenWidth / (float) screenHeight;
 
-    float fieldOfView, screenAspect;
-    fieldOfView = (float) 3.14 / 4.0f;
-    screenAspect = (float) screenWidth / (float) screenHeight;
-
-    projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(fieldOfView, screenAspect, screenNear, screenDepth);
-    worldMatrix = DirectX::XMMatrixIdentity();
-    orthoMatrix = DirectX::XMMatrixOrthographicLH((float) screenWidth, (float) screenHeight, screenNear, screenDepth);
+//    projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(fieldOfView, screenAspect, screenNear, screenDepth);
+//    worldMatrix = DirectX::XMMatrixIdentity();
+//    orthoMatrix = DirectX::XMMatrixOrthographicLH((float) screenWidth, (float) screenHeight, screenNear, screenDepth);
 }
